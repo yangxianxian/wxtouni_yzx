@@ -1,6 +1,6 @@
 {
   "name": "wxtouni",
-  "version": "1.0.15",
+  "version": "1.0.17",
   "description": "Used to convert WeChat applet native code into executable uniapp code",
   "main": "index.js",
   "scripts": {

@@ -15,13 +15,7 @@ const readDir = (entry) => {
 		const location = path.join(entry,item);
 		const info = fs.statSync(location);
 		if(info.isDirectory()){
-			if(item == 'assets') {
-				return
-			}
-			if(item == 'utils') {
-				return
-			}
-			if(item == 'node_modules') {
+			if(item == 'assets' || item == '.git' || item == 'utils' || item == 'node_modules') {
 				return
 			}
 			console.log(location)

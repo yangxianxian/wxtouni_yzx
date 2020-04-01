@@ -99,8 +99,8 @@ function parseJson(location) {
         }
     }
     
+    if(jsonFilePath) fs.unlinkSync(jsonFilePath)
     
-    fs.unlinkSync(jsonFilePath)
     return {
         vueFilePath:vueFilePath,
         componentImport:importStrArr,
