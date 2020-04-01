@@ -135,6 +135,18 @@ class TemplateParser{
             if (item.type === 'text') {
                 str += item.data;
             } else if (item.type === 'tag') {
+                if(item.name.indexOf('_') != -1) {
+                    let splitName = item.name.split('_')
+                    if(splitName && splitName.length) {
+                        for(let i in splitName) {
+                            if(i != 0) {
+                                splitName[i] = splitName[i].charAt(0).toUpperCase() + splitName[i].slice(1)
+                            }
+                        }
+                    }
+                    item.name = splitName.join('')
+                }
+                
                 str += '<' + item.name;
                 if (item.attribs) {
                     Object.keys(item.attribs).forEach(attr => {
@@ -162,8 +174,9 @@ class TemplateParser{
                                     if(strPattern.test(val)) {
                                         //除了attrConverterConfigUni中匹配的修改规则外去除没有匹配到的属性的双括号
                                         // repairAttr
-                                        let resultAttr = val.replace(/{{ ?(.*?) ?}}/g, "${ $1 }")
-                                        str += ` :${attr}` + '="`' + `${resultAttr}` + '`"';
+                                        let resultAttr = val.replace(/{{ ?(.*?) ?}}/g, "$1")
+                                        // str += ` :${attr}` + '="`' + `${resultAttr}` + '`"';
+                                        str += ` :${attr}="${resultAttr}"`;
                                     }else {
                                         str += ` ${attr}="${val}"`;
                                     }

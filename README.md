@@ -29,6 +29,7 @@ $ npm update wxtouni -g
 ```sh
 1、除组件components和page,以及根目录的app.js和app.json、app.wxss这些以外的文件都自动屏蔽不做转换
 2、转换后并不能直接运行，需要手动更改一些特殊写法
+3、项目不需要转换的文件都必须放在utils文件夹中，不然就会被转义，例如请求封装等js
 ```
 
 ## 文件转换
