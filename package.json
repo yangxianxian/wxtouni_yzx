@@ -1,0 +1,23 @@
+{
+  "name": "wxtouni",
+  "version": "1.0.14",
+  "description": "Used to convert WeChat applet native code into executable uniapp code",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "bin": {
+    "wxTOuni": "./temp/AST.js"
+  },
+  "author": "yzx",
+  "license": "ISC",
+  "dependencies": {
+    "@babel/cli": "^7.8.4",
+    "@babel/core": "^7.9.0",
+    "@babel/parser": "^7.9.4",
+    "@babel/traverse": "^7.9.0",
+    "@babel/types": "^7.9.0",
+    "htmlparser2": "^4.1.0",
+    "relix": "^1.1.4"
+  }
+}
