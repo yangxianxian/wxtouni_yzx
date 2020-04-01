@@ -18,7 +18,7 @@ function paseCss(location) {
         console.log(wxssFilePath)
         let wxssDatas = fs.readFileSync(wxssFilePath)
         let str = '<style>\n'+wxssDatas +'\n</style>'
-        fs.unlinkSync(wxssFilePath)
+        if(wxssFilePath) fs.unlinkSync(wxssFilePath)
         return str
     } catch (error) {
         return null
@@ -53,7 +53,7 @@ function parseWxml(location) {
             // let wxmlFilePath = path.join(lastDir,basename+'.wxml')
             let wxmldData = fs.readFileSync(wxmlFilePath);
             let wxmlStr = templateParser.parseHtml(wxmldData)
-            fs.unlinkSync(wxmlFilePath)
+            if(wxmlFilePath) fs.unlinkSync(wxmlFilePath)
             resolve(wxmlStr)
         }else {
             resolve('')
@@ -226,7 +226,7 @@ class JavascriptParser {
                 }
             })
             // return
-            fs.unlinkSync(location)
+            if(location) fs.unlinkSync(location)
             core.transformFromAstAsync(ASTtree).then(res => {
                 let scriptStr = wxmlResult + '\n<script>\n'+ jsonData.componentImport + res.code+'\n</script>\n'+wxssData
                 fs.writeFile(jsonData.vueFilePath,scriptStr,function(err){
