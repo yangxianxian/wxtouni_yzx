@@ -10,9 +10,7 @@ const templateParser = new TemplateParser();
 
 function paseCss(location) {
     let lastDir = path.resolve(location,'..')
-    // let basename = path.basename(lastDir) 
-    // let wxssFilePath = path.join(lastDir,basename+'.wxss')
-    let wxssFilePath = getdirFiles(lastDir,'.wxss')
+    let wxssFilePath = getdirFiles(lastDir,'.wxss').path
     
     try {
         console.log(wxssFilePath)
@@ -34,23 +32,24 @@ function getdirFiles(location,type) {
             const location_name = path.join(location,name);
             const info = fs.statSync(location_name);
             if(!info.isDirectory()) {
-                let suffixName = path.extname(location_name)
-                if(suffixName == type && name != 'project.config.json' && name != 'sitemap.json') {
-                    result = location_name
+                // let suffixName = path.extname(location_name)
+                if(path.extname(name) == type && name != 'project.config.json' && name != 'sitemap.json') {
+                    result = {
+                        path:location_name,
+                        names:path.basename(name,type)
+                    }
                 }
             }
         })
         return result
     }
 }
-function parseWxml(location) {
+function parseWxml(location) {//格式化wxml文件
     return new Promise((resolve,reject) => {
         let lastDir = path.resolve(location,'..')
-        // let basename = path.basename(lastDir) 
-        let wxmlFilePath = getdirFiles(lastDir,'.wxml')
+        let wxmlFilePath = getdirFiles(lastDir,'.wxml').path
         if(wxmlFilePath) {
             console.log(wxmlFilePath)
-            // let wxmlFilePath = path.join(lastDir,basename+'.wxml')
             let wxmldData = fs.readFileSync(wxmlFilePath);
             let wxmlStr = templateParser.parseHtml(wxmldData)
             if(wxmlFilePath) fs.unlinkSync(wxmlFilePath)
@@ -66,16 +65,52 @@ function parseJson(location) {
     //json解析转换
     //把json中引用的组件处理到页面中以vue的形式展现
     let lastDir = path.resolve(location,'..')
-    let basename = path.basename(lastDir) 
-    if(basename == 'dist') basename = 'app'
-    let vueFilePath = path.join(lastDir,basename+'.vue')
-    // let jsonFilePath = path.join(lastDir,basename+'.json')
     let jsonFilePath = getdirFiles(lastDir,'.json')
+    if(!jsonFilePath) return null
     let importStrArr = ''
     let componentAst = ''
-    if(jsonFilePath) {
-        console.log(jsonFilePath)
-        let parseSouces = JSON.parse(fs.readFileSync(jsonFilePath).toString())
+    if(path.basename(lastDir) == 'wxTOuni') {//如果是根目录就直接处理app.json
+        jsonFilePath.names = 'App'
+        //处理app.json文件
+        let appJsonFile = JSON.parse(fs.readFileSync(jsonFilePath.path).toString())
+        if(appJsonFile.pages.length) {
+            appJsonFile.pages.map((pageName,index) => {
+                appJsonFile.pages[index] = {
+                    path: pageName
+                }
+            })
+        }
+        if(appJsonFile.subpackages && appJsonFile.subpackages.length) {
+            let pageResult = []
+            appJsonFile.subpackages.map(pageItem => {
+                if(pageItem.pages && pageItem.pages.length) {
+                    pageItem.pages.map(pageName => {
+                        pageName = pageItem.root + '/'+ pageName
+                        pageResult.push({
+                            path: pageName
+                        })
+                    })
+                }
+            })
+            appJsonFile.pages = [...appJsonFile.pages,...pageResult]
+            delete appJsonFile.subpackages
+        }
+        
+        appJsonFile = JSON.stringify(appJsonFile,"","\t")
+        appJsonFile = appJsonFile.replace(/window/g,'globalStyle')
+        //创建pages.json文件并写入json串
+        let pagesJsonPath = path.join(lastDir,'pages.json')
+        fs.writeFile(pagesJsonPath,appJsonFile,function(err) {
+            if(err) {
+                console.log('app.json文件处理失败！')
+                return
+            }
+            console.log('app.json文件处理完毕，请手动删除多余的微信小程序api')
+        })
+            
+    }else {//除app.json以外的其他json文件处理
+        console.log(jsonFilePath.path)
+        let parseSouces = JSON.parse(fs.readFileSync(jsonFilePath.path).toString())
         if(parseSouces && parseSouces.usingComponents) {
             let componentObj = parseSouces.usingComponents
             let componentObjArr = Object.keys(componentObj)
@@ -96,30 +131,41 @@ function parseJson(location) {
                         }
                         importKey = splitName.join('')
                     }
-                    
+                    if(componentObj[key].indexOf('components') != -1) {
+                        componentObj[key] ='@/'+ componentObj[key].replace(/^(..\/)*/g,'')
+                    }
                     importStrArr += 'import '+ importKey + ' from ' +'"'+componentObj[key]+'"' + '\n'
-                    componentKeyArr.push(t.Identifier(importKey))
+                    componentKeyArr.push(t.objectProperty(
+                        t.Identifier(importKey),t.Identifier(importKey),false,true
+                    ))
                 }
-                componentAst = t.LabeledStatement(
+                componentAst = t.objectProperty(
                     t.Identifier('components'),
-                    t.blockStatement([
-                        t.ExpressionStatement(
-                            t.SequenceExpression(componentKeyArr)
-                        )
-                    ])
+                    t.objectExpression(componentKeyArr)
                 )
             }
         }
     }
-    
-    if(jsonFilePath) fs.unlinkSync(jsonFilePath)
-    
+    fs.unlinkSync(jsonFilePath.path)
+    let vueFilePath = path.join(lastDir,jsonFilePath.names+'.vue')
     return {
         vueFilePath:vueFilePath,
         componentImport:importStrArr,
         componentAst:componentAst
     }
 }
+
+function parseWxs(location) {//wxs文件转换
+    let lastDir = path.resolve(location,'..')
+    let jsonFilePath = getdirFiles(lastDir,'.wxs')
+    if(!jsonFilePath) return null
+    // console.log(jsonFilePath)
+    // let wxsFile = fs.readFileSync(jsonFilePath.path)
+    let scriptStr = `\n<script module="${jsonFilePath.names}" lang="wxs" src="./${path.basename(jsonFilePath.path)}"></script>\n`
+    // fs.unlinkSync(jsonFilePath.path)
+    return scriptStr
+}
+
 class JavascriptParser {
     constructor() {
 
@@ -127,9 +173,11 @@ class JavascriptParser {
 
     async buildScript (souces,location) {
             //js解析转换
-            let wxssData = paseCss(location)
             let jsonData = parseJson(location)
+            // if(!jsonData) return
+            let wxssData = paseCss(location)
             let wxmlData = await parseWxml(location)
+            let wxsData = parseWxs(location)
             let wxmlResult = wxmlData ? '<template>\n<view>\n' + wxmlData + '\n</view>\n</template>' : ''
             
             let ASTtree = this.astParseEvent(souces.toString()) //解析出AST树
@@ -137,17 +185,47 @@ class JavascriptParser {
                 ExpressionStatement:function(path) {//添加export default{}包裹层
                     let expressions = path.node.expression
                     if(!expressions || !expressions.callee) return
-                    if(expressions.callee.name == 'Component' || expressions.callee.name == 'Page') {
+                    if(expressions.callee.name == 'Component' || expressions.callee.name == 'Page' || expressions.callee.name == 'App') {
                         if(expressions.arguments[0]) {
                             let argumentPro = expressions.arguments[0].properties
                             if(argumentPro.length) {
                                 //去掉js中的pageLifetimes，并把其中的方法和事情放出来
+                                let methodArr = []
+                                let liveEventArr = []
                                 argumentPro.map(item => {
                                     const name = item.key.name
                                     if(name == 'pageLifetimes' && item.value.properties && item.value.properties.length) {
                                         expressions.arguments[0].properties = argumentPro.concat(item.value.properties)
                                     }
+                                    //除生命周期和data以外的所有方法事件全部放进method方法中
+                                    if(expressions.callee.name == 'Page') {
+                                        if( name != 'data' 
+                                            && name != 'onLoad'
+                                            && name != 'onShow'
+                                            && name != 'onReady'
+                                            && name != 'onHide'
+                                            && name != 'onUnload'
+                                            && name != 'onPullDownRefresh'
+                                            && name != 'onReachBottom'
+                                            && name != 'onShareAppMessage'
+                                            && name != 'onPageScroll'
+                                            && name != 'onResize'
+                                            && name != 'onTabItemTap') {
+                                            methodArr.push(item)
+                                        }else {
+                                            liveEventArr.push(item)
+                                        }
+                                    }
+                                    
                                 })
+                                if(methodArr.length) {
+                                    expressions.arguments[0].properties = liveEventArr
+                                    let methodsAst = t.objectProperty(
+                                        t.Identifier('methods'),
+                                        t.objectExpression(methodArr)
+                                    )
+                                    expressions.arguments[0].properties.push(methodsAst)
+                                }
                             }
                         }
                         path.replaceWith(
@@ -159,7 +237,10 @@ class JavascriptParser {
                         //更改子组件向父组件转递值的方式
                         //因为父组件再取值的时候是data.detail。所以再包裹一层detail
                         path.node.expression.callee.property.name = '$emit'
-                        if(path.node.expression.arguments.length > 1 && path.node.expression.arguments[1].properties.length) {
+                        if(path.node.expression.arguments 
+                            && path.node.expression.arguments.length > 1 
+                            && path.node.expression.arguments[1].properties
+                            && path.node.expression.arguments[1].properties.length) {
                             let detailAst = t.objectExpression([
                                 t.ObjectProperty(
                                     t.Identifier('detail'),
@@ -230,12 +311,32 @@ class JavascriptParser {
                         path.replaceWith(t.Identifier("uni"))
                     }
                 },
-                MemberExpression:function(path) {//把this.data改为this
+                MemberExpression:function(path) {
+                    //把this.data改为this
                     let names = path.node.object.type =='ThisExpression' ? 'this' : path.node.object.name
                     if((names == 'this' || names == '_this' || names =='that') && path.node.property.name == 'data') {
                         path.replaceWith(t.Identifier(names))
                     }
-
+                },
+                VariableDeclarator:function(path) {
+                    //更改tap点击事件的取值方式（event.currentTarget.dataset）
+                    let nodeInit = path.node.init
+                    if(nodeInit && nodeInit.type == 'MemberExpression' && nodeInit.object) {
+                        if( nodeInit.object.property
+                            && nodeInit.object.property.name == 'currentTarget'
+                            && nodeInit.property.name == 'dataset') {
+                            path.node.init = t.Identifier('arguments[0]') 
+                            path.replaceWith(path.node)
+                        }else if(nodeInit.object.object
+                            && nodeInit.object.object.property
+                            && nodeInit.object.object.property.name == 'currentTarget'
+                            && nodeInit.object.property
+                            && nodeInit.object.property.name == 'dataset') {
+                            path.node.init.object = t.Identifier('arguments[0]') 
+                            path.replaceWith(path.node)
+                        }
+                            
+                    }
                 },
                 CallExpression:function(path) {
                     //重写setData
@@ -271,7 +372,7 @@ class JavascriptParser {
             // return
             if(location) fs.unlinkSync(location)
             core.transformFromAstAsync(ASTtree).then(res => {
-                let scriptStr = wxmlResult + '\n<script>\n'+ jsonData.componentImport + res.code+'\n</script>\n'+wxssData
+                let scriptStr = wxmlResult + wxsData + '\n<script>\n'+ jsonData.componentImport + res.code+'\n</script>\n'+wxssData
                 fs.writeFile(jsonData.vueFilePath,scriptStr,function(err){
                     if(err) {
                         return err;

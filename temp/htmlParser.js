@@ -8,10 +8,9 @@ function turnWxfor(attr,attrArr) {//转换wx:for
     let indexK = 'index'
     Object.keys(attrArr).map(k => {
         if(k == 'wx:for-item') {
-            itemK = k.split('-')[1]
-        }
-        if(k == 'wx:for-index') {
-            indexK = k.split('-')[1]
+            itemK = attrArr[k]
+        } else if(k == 'wx:for-index') {
+            indexK = attrArr[k]
         }
     })
     let result = `"(${itemK},${indexK}) in ${repairAttr(attr)}" :key="${indexK}"`
@@ -48,6 +47,7 @@ const attrConverterConfigUni = {
     'wx:else': {
         key: 'v-else',
         value: str => {
+            console.log(55555555555555)
             return repairAttr(str);
         }
     },
@@ -90,6 +90,42 @@ const attrConverterConfigUni = {
     },
     'bind:tap': {
         key: '@tap',
+        value: str => {
+            return repairAttr(str);
+        }
+    },
+    'bind:touchstart': {
+        key: '@touchstart',
+        value: str => {
+            return repairAttr(str);
+        }
+    },
+    'bind:touchmove': {
+        key: '@touchmove',
+        value: str => {
+            return repairAttr(str);
+        }
+    },
+    'catch:touchmove': {
+        key: '@touchmove',
+        value: str => {
+            return repairAttr(str);
+        }
+    },
+    'change:prop': {
+        key: 'change:prop',
+        value: str => {
+            return repairAttr(str);
+        }
+    },
+    'bind:touchend': {
+        key: '@touchend',
+        value: str => {
+            return repairAttr(str);
+        }
+    },
+    bindtouchstart:{
+        key: '@touchstart',
         value: str => {
             return repairAttr(str);
         }
@@ -146,43 +182,86 @@ class TemplateParser{
                     }
                     item.name = splitName.join('')
                 }
-                
+                if(item.name == 'wxs') {
+                    return
+                }
                 str += '<' + item.name;
                 if (item.attribs) {
                     Object.keys(item.attribs).forEach(attr => {
-                        // console.log(attr)
                         let val = item.attribs[attr];
-                        if(attr == 'wx:key') {
+                        if(attr == 'wx:key' || attr.indexOf('wx:for-') != -1) {
                             return
                         }
-                        if (val == "") {
-                            //需要同时满足；如果attr=data，且没有value时，也删除
-                            if (attr.indexOf(":") > -1 || attr == "data") {
-                                //key含冒号且value为空时，直接删除
-                            } else {
+                        if(attr.indexOf('data-') != -1) {
+                            return
+                        }
+                        if(attr == "data") {
+                            return
+                        }
+                        let attrObj = attrConverterConfigUni[attr]
+                        if (val == "") {//wx:else
+                            if(attrObj) {
+                                str += ` ${attrObj.key}`;
+                            }else {
                                 str += ` ${attr}`;
                             }
                         } else {
-                            let attrObj = attrConverterConfigUni[attr]
                             if(attr == 'wx:for') {
                                 str += ` ${attrObj.key}=${attrObj.value(val,item.attribs)}`;
                             }else {
                                 if(attrObj) {
-                                    str += ` ${attrObj.key}="${attrObj.value(val)}"`;
+                                    if(attrObj.key.indexOf('@') != -1) {
+                                        let clickMethordOrg = []
+                                        let isContainProp = false//判断当前方法事件是否是wxs事件
+                                        Object.keys(item.attribs).filter(kres => {
+                                            let kresVal = item.attribs[kres]
+                                            if(kres == 'change:prop') {
+                                                isContainProp = true
+                                                if(kres.indexOf('data-') != -1) {
+                                                    str += ` ${kres}="${kresVal}"`;
+                                                }
+                                            }
+                                            if(kres.indexOf('data-') != -1) {
+                                                let keySlice = kres.slice(5)
+                                                let strPattern = /{{ ?(.*?) ?}}/g
+                                                let rRV = strPattern.test(kresVal) ? kresVal.replace(/{{ ?(.*?) ?}}/g, "$1") : `'${kresVal}'`
+                                                clickMethordOrg.push(`${keySlice}:${rRV}`)
+                                            }
+                                        })
+                                        if(!isContainProp && clickMethordOrg.length) {
+                                            str += ` ${attrObj.key}="${attrObj.value(val)}({${clickMethordOrg.join(',')}})"`;
+                                        }else {
+                                            str += ` ${attrObj.key}="${attrObj.value(val)}"`;
+                                        }
+                                    }else {
+                                        str += ` ${attrObj.key}="${attrObj.value(val)}"`;
+                                    }
                                 }else {
+                                    if(attr == 'src') {
+                                        val = val.replace(/assets/g,'static')
+                                    }
                                     let strPattern = /{{ ?(.*?) ?}}/g
                                     if(strPattern.test(val)) {
                                         //除了attrConverterConfigUni中匹配的修改规则外去除没有匹配到的属性的双括号
-                                        // repairAttr
-                                        let resultAttr = val.replace(/{{ ?(.*?) ?}}/g, "$1")
-                                        // str += ` :${attr}` + '="`' + `${resultAttr}` + '`"';
-                                        str += ` :${attr}="${resultAttr}"`;
+                                        if(attr == 'class' || attr == 'src' || (val.match(strPattern) && val.match(strPattern).length > 1)) {
+                                            let resultAttr = val.replace(/{{ ?(.*?) ?}}/g, "${ $1 }")
+                                            str += ` :${attr}` + '="`' + `${resultAttr}` + '`"';
+                                        }else {
+                                            let resultAttr = val.replace(/{{ ?(.*?) ?}}/g, "$1")
+                                            str += ` :${attr}="${resultAttr}"`;
+                                        }
                                     }else {
-                                        str += ` ${attr}="${val}"`;
+                                        if(attr.indexOf('bind:') != -1) {
+                                            attr = attr.replace(/bind:/g,'')
+                                            str += ` @${attr}="${val}"`;
+                                        }else {
+                                            str += ` ${attr}="${val}"`;
+                                        }
                                     }
                                 }
                             }
                         }
+                        
                     });
                 }
                 str += '>';
